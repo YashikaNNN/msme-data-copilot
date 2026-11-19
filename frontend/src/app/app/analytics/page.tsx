@@ -92,7 +92,15 @@ export default function AnalyticsPage() {
                   <SalesTrendChart data={salesTrend} />
                 </div>
               ) : (
-                <p className="mt-4 text-sm text-muted">Need dated sales amounts before a trend chart can appear.</p>
+                <div className="mt-4 space-y-2 text-sm text-muted">
+                  <p>Need dated sales amounts before a trend chart can appear.</p>
+                  {(sales.orders || 0) > 0 && sales.revenue == null ? (
+                    <p className="rounded-xl bg-amber-50 px-3 py-2 text-warn">
+                      Orders were loaded, but revenue amounts are still empty. Open the sales dataset and click{" "}
+                      <strong>Process for insights</strong> again, then refresh this page.
+                    </p>
+                  ) : null}
+                </div>
               )}
               {(sales.notes || []).map((note: string) => (
                 <p key={note} className="mt-2 text-xs text-muted">
