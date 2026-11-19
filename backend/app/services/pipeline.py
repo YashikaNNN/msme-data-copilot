@@ -115,6 +115,7 @@ def run_pipeline(db: Session, dataset_id: int) -> PipelineRun:
             "pipeline",
             f"Pipeline for {dataset.name} finished with {len(gold_rows)} trusted rows and {rejected} quarantined rows.",
             dataset.id,
+            business_id=dataset.business_id,
         )
     except Exception as exc:
         message = exc.message if isinstance(exc, AppError) else "The pipeline stopped because of an unexpected error."
@@ -127,14 +128,20 @@ def run_pipeline(db: Session, dataset_id: int) -> PipelineRun:
                 stage.status = "failed"
                 stage.error_message = message
                 stage.finished_at = datetime.now(timezone.utc)
-        log_activity(db, "pipeline_failed", f"Pipeline for {dataset.name} failed: {message}", dataset.id)
+        log_activity(
+            db,
+            "pipeline_failed",
+            f"Pipeline for {dataset.name} failed: {message}",
+            dataset.id,
+            business_id=dataset.business_id,
+        )
         if not isinstance(exc, AppError):
             raise
     db.flush()
     return run
 
 
-def refresh_references(db: Session) -> list[dict]:
+def refresh_references(db: Session, business_id: int | None = None) -> list[dict]:
     """Flag sales that point at a product or customer id the workspace does not know.
 
     This runs only when a product or customer dataset has already been loaded.
@@ -142,11 +149,23 @@ def refresh_references(db: Session) -> list[dict]:
     """
 
     from app.models import ValidationResult
+    from app.services.repository import business_dataset_ids
 
-    products = {row.product_id for row in db.query(GoldRecord).filter_by(entity="product") if row.product_id}
-    customers = {row.customer_id for row in db.query(GoldRecord).filter_by(entity="customer") if row.customer_id}
+    product_query = db.query(GoldRecord).filter_by(entity="product")
+    customer_query = db.query(GoldRecord).filter_by(entity="customer")
+    sales_query = db.query(GoldRecord).filter_by(entity="sale")
+    if business_id is not None:
+        ids = business_dataset_ids(db, business_id)
+        if not ids:
+            return []
+        product_query = product_query.filter(GoldRecord.dataset_id.in_(ids))
+        customer_query = customer_query.filter(GoldRecord.dataset_id.in_(ids))
+        sales_query = sales_query.filter(GoldRecord.dataset_id.in_(ids))
+
+    products = {row.product_id for row in product_query if row.product_id}
+    customers = {row.customer_id for row in customer_query if row.customer_id}
     findings = []
-    sales = db.query(GoldRecord).filter_by(entity="sale").all()
+    sales = sales_query.all()
     by_dataset: dict[int, list[GoldRecord]] = {}
     for row in sales:
         by_dataset.setdefault(row.dataset_id, []).append(row)

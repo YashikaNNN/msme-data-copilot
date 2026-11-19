@@ -1,0 +1,73 @@
+order_id,order_date,customer_id,product_id,product_name,category,quantity,amount
+O-2001,2024-01-08,C-001,P-100,Notebook A5,Stationery,12,540
+O-2002,08/01/2024,C-002,P-104,Rice 5kg,Grocery,4,1680
+O-2003,2024-01-22,c-001,P-102,USB Cable,Electronics,2,398
+O-2004,22-01-2024,C-004,P-106,Cotton Shirt,Apparel,1,699
+O-2005,2024-02-05,C-005,P-103,Wireless Mouse,elec,1,749
+O-2006,2024-02-05,C-005,P-103,Wireless Mouse,Electronics,1,749
+O-2007,2024-02-18,C-003,P-101,Ball Pen Pack,Stationery,8,960
+O-2008,18/02/2024,C-006,P-107,Denim Jeans,Apparel,2,2598
+O-2009,2024-03-01,C-002,P-105,Cooking Oil 1L,Grocery,5,925
+O-2010,01-03-2024,C-001,P-108,LED Bulb,Electronics,6,714
+O-2011,2024-03-14,C-007,P-100,Notebook A5,stationery,20,900
+O-2012,2024-03-14,C-007,P-100,Notebook A5,Stationery,20,900
+O-2013,2024-03-28,C-004,P-109,Hand Sanitizer,Grocery,10,450
+O-2014,28/03/2024,C-008,P-110,Office Chair,Furniture,1,4500
+O-2015,2024-04-02,C-006,P-101,Ball Pen Pack,Stationery,3,abc
+O-2016,2024-04-09,C-003,P-102,USB Cable,Electronics,1,-199
+O-2017,2024-04-16,C-009,P-106,Cotton Shirt,Apparel,2,1398
+O-2018,16-04-2024,C-001,P-104,Rice 5kg,Grocery,1,420
+O-2019,2024-04-30,C-010,P-111,Steel Bottle,Kitchen,4,1200
+O-2020,2024-05-05,C-002,P-103,Wireless Mouse,Electronics,3,2247
+O-2021,05/05/2024,C-005,P-107,Denim Jeans,apparel,1,1299
+O-2022,2024-05-12,C-011,P-108,LED Bulb,elec,10,1190
+O-2023,2024-05-19,C-004,P-100,Notebook A5,Stationery,5,225
+O-2024,19-05-2024,C-012,P-112,Yoga Mat,Sports,2,998
+O-2025,2024-05-26,C-001,P-105,Cooking Oil 1L,Grocery,2,370
+O-2026,2024-06-03,C-008,P-110,Office Chair,Furniture,1,4500
+O-2027,03/06/2024,C-006,P-109,Hand Sanitizer,Grocery,15,675
+O-2028,2024-06-10,C-013,P-101,Ball Pen Pack,Stationery,12,1440
+O-2029,2024-06-17,C-002,P-102, USB Cable ,Electronics,4,796
+O-2030,17-06-2024,C-007,P-103,Wireless Mouse,Electronics,1,749
+O-2031,2024-06-24,C-999,P-999,Unknown Kit,Other,1,500
+O-2032,,C-004,P-100,Notebook A5,Stationery,2,90
+O-2033,2024-07-01,C-010,P-111,Steel Bottle,Kitchen,3,900
+O-2034,01/07/2024,C-003,P-106,Cotton Shirt,Apparel,1,699
+O-2035,2024-07-08,C-014,P-113,Printer Paper,Stationery,5,
+O-2036,2024-07-15,C-001,P-108,LED Bulb,Electronics,8,952
+O-2037,15-07-2024,C-005,P-104,Rice 5kg,grocery,6,2520
+O-2038,2024-07-22,C-015,P-114,Wall Clock,Home,1,899
+O-2039,2024-07-29,C-008,P-110,Office Chair,Furniture,1,4500
+O-2040,2024-08-05,C-002,P-105,Cooking Oil 1L,Grocery,4,740
+O-2041,05/08/2024,C-016,P-100,Notebook A5,Stationery,25,1125
+O-2042,2024-08-12,C-006,P-107,Denim Jeans,Apparel,1,1299
+O-2043,2024-08-19,C-004,P-101,Ball Pen Pack,Stationery,6,720
+O-2044,19-08-2024,C-011,P-102,USB Cable,Electronics,3,597
+O-2045,2024-08-26,C-001,P-103,Wireless Mouse,Electronics,2,1498
+O-2046,2024-09-02,C-017,P-115,Desk Lamp,Electronics,1,1299
+O-2047,02/09/2024,C-007,P-109,Hand Sanitizer,Grocery,8,360
+O-2048,2024-09-09,C-003,P-106,Cotton Shirt,Apparel,3,2097
+O-2049,2024-09-16,C-010,P-111,Steel Bottle,Kitchen,2,600
+O-2050,16-09-2024,C-018,P-116,Keyboard,elec,1,1899
+O-2051,2024-09-23,C-005,P-108,LED Bulb,Electronics,12,1428
+O-2052,2024-09-30,C-002,P-104,Rice 5kg,Grocery,2,840
+O-2053,2024-10-07,C-019,P-100,Notebook A5,Stationery,15,675
+O-2054,07/10/2024,C-008,P-110,Office Chair,Furniture,2,9000
+O-2055,2024-10-14,C-001,P-105,Cooking Oil 1L,Grocery,3,555
+O-2056,2024-10-21,C-006,P-107,Denim Jeans,Apparel,1,1299
+O-2057,21-10-2024,C-012,P-112,Yoga Mat,Sports,1,499
+O-2058,2024-10-28,C-004,P-101,Ball Pen Pack,Stationery,10,1200
+O-2059,2024-11-04,C-020,P-117,Mouse Pad,Electronics,5,495
+O-2060,04/11/2024,C-003,P-102,USB Cable,Electronics,2,398
+O-2061,2024-11-11,C-007,P-103,Wireless Mouse,Electronics,1,749
+O-2062,2024-11-18,C-001,P-100,Notebook A5,Stationery,8,360
+O-2063,18-11-2024,C-015,P-114,Wall Clock,Home,2,1798
+O-2064,2024-11-25,C-009,P-106,Cotton Shirt,Apparel,1,699
+O-2065,2024-12-02,C-002,P-104,Rice 5kg,Grocery,5,2100
+O-2066,02/12/2024,C-016,P-115,Desk Lamp,Electronics,1,1299
+O-2067,2024-12-09,C-010,P-111,Steel Bottle,Kitchen,6,1800
+O-2068,2024-12-16,C-005,P-108,LED Bulb,Electronics,4,476
+O-2069,16-12-2024,C-018,P-116,Keyboard,Electronics,1,1899
+O-2070,2024-12-23,C-001,P-105,Cooking Oil 1L,Grocery,2,370
+O-2071,2030-01-01,C-004,P-100,Notebook A5,Stationery,1,45
+O-2072,2024-03-11,C-005,P-103,Wireless Mouse,Electronics,2,1498

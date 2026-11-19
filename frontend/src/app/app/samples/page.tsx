@@ -1,7 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
-import { apiGet, apiPost, exportUrl } from "@/lib/api";
+import { apiGet, apiPost, downloadAuthenticated } from "@/lib/api";
 import { Badge, Button, Card, EmptyState, Skeleton } from "@/components/ui";
 
 export default function SamplesPage() {
@@ -24,7 +25,7 @@ export default function SamplesPage() {
       const lines = (result.processed || [])
         .map((item: any) => `${item.name}: ${item.status} (loaded ${item.loaded}, rejected ${item.rejected})`)
         .join(" · ");
-      setMessage(lines || "Sample datasets loaded.");
+      setMessage(lines || "Sample datasets loaded into your private workspace.");
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -39,14 +40,22 @@ export default function SamplesPage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="font-display text-3xl font-bold">Sample business data</h1>
+          <h1 className="font-display text-3xl font-bold">Try sample business data</h1>
           <p className="mt-1 text-muted">
-            Explicitly labelled demo files with missing values, duplicates, bad dates, and inconsistent IDs.
+            Optional demo files with missing values, duplicates, bad dates, and inconsistent IDs — so you can
+            explore quality, cleaning, and insights before uploading your own sheets.
           </p>
         </div>
-        <Button onClick={loadWorkspace} disabled={busy}>
-          {busy ? "Loading sample workspace…" : "Load sample workspace"}
-        </Button>
+        <div className="flex gap-2">
+          <Button onClick={loadWorkspace} disabled={busy}>
+            {busy ? "Loading sample workspace…" : "Load into my workspace"}
+          </Button>
+          {message ? (
+            <Link href="/app/analytics">
+              <Button variant="secondary">View insights</Button>
+            </Link>
+          ) : null}
+        </div>
       </div>
 
       {message ? <p className="rounded-xl bg-teal-50 px-4 py-3 text-sm text-accent-2">{message}</p> : null}
@@ -66,9 +75,12 @@ export default function SamplesPage() {
               <span className="text-muted">
                 {item.filename} · {(item.size_bytes / 1024).toFixed(1)} KB
               </span>
-              <a href={exportUrl(`/samples/${item.filename}`)}>
-                <Button variant="secondary">Download</Button>
-              </a>
+              <Button
+                variant="secondary"
+                onClick={() => downloadAuthenticated(`/samples/${item.filename}`, item.filename)}
+              >
+                Download
+              </Button>
             </div>
           </Card>
         ))}

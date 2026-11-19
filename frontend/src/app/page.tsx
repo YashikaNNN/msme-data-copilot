@@ -3,27 +3,27 @@ import { ArrowRight, CheckCircle2, Database, ShieldCheck, Sparkles } from "lucid
 
 const FEATURES = [
   {
-    title: "Upload messy files",
-    body: "CSV, Excel, and JSON with schema detection and safe storage.",
+    title: "Upload business files",
+    body: "Bring CSV, Excel, or JSON sales, customer, inventory, and expense sheets.",
     icon: Database,
   },
   {
-    title: "Diagnose data quality",
-    body: "Real scores for completeness, validity, uniqueness, and consistency.",
+    title: "Understand data quality",
+    body: "See missing values, duplicates, and invalid records with clear scores and fixes.",
     icon: ShieldCheck,
   },
   {
-    title: "Ask evidence-based questions",
-    body: "The AI Copilot answers from calculated metrics, not invented numbers.",
+    title: "Get trusted insights",
+    body: "Charts and AI answers use only cleaned, validated data — never invented numbers.",
     icon: Sparkles,
   },
 ];
 
 const STEPS = [
-  "Upload sales, customers, inventory, or expense files",
-  "Profile and score quality issues automatically",
-  "Preview cleaning, validate, then load trusted rows",
-  "Explore analytics and ask the business copilot",
+  "Create your business account",
+  "Upload or try sample datasets",
+  "Review quality, clean, and validate",
+  "Explore analytics and ask questions",
 ];
 
 export default function LandingPage() {
@@ -34,29 +34,29 @@ export default function LandingPage() {
           <div>
             <p className="text-sm font-semibold uppercase tracking-[0.2em] text-teal-100">MSME Data Copilot</p>
             <h1 className="mt-4 font-display text-4xl font-bold leading-tight lg:text-5xl">
-              From messy business data to trusted intelligence
+              Clean business data. Trusted insights.
             </h1>
             <p className="mt-4 max-w-xl text-base text-teal-50/90 lg:text-lg">
-              Upload spreadsheets, diagnose quality problems, clean and validate them, then explore revenue,
-              customers, inventory, and expenses with an AI copilot grounded in your loaded data.
+              A private workspace for MSME owners to upload messy spreadsheets, fix quality issues,
+              and understand sales, customers, stock, and expenses with confidence.
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
               <Link
-                href="/app"
+                href="/register"
                 className="inline-flex items-center gap-2 rounded-xl bg-white px-5 py-3 text-sm font-semibold text-accent-2"
               >
-                Open dashboard <ArrowRight size={16} />
+                Create free account <ArrowRight size={16} />
               </Link>
               <Link
-                href="/app/upload"
+                href="/login"
                 className="inline-flex items-center gap-2 rounded-xl border border-white/30 px-5 py-3 text-sm font-semibold text-white"
               >
-                Upload dataset
+                Sign in
               </Link>
             </div>
           </div>
           <div className="rounded-3xl border border-white/15 bg-white/10 p-6 backdrop-blur">
-            <p className="text-sm font-semibold text-teal-100">How it works</p>
+            <p className="text-sm font-semibold text-teal-100">Simple workflow</p>
             <ol className="mt-4 space-y-3">
               {STEPS.map((step, index) => (
                 <li key={step} className="flex gap-3 text-sm text-white/90">
@@ -88,7 +88,7 @@ export default function LandingPage() {
         <div className="border-t border-line px-6 py-6 lg:px-8">
           <div className="flex flex-wrap items-center gap-3 text-sm text-muted">
             <CheckCircle2 size={16} className="text-ok" />
-            Original uploads stay in Bronze. Cleaning writes Silver. Analytics read Gold only.
+            Each business account keeps its own datasets, quality reports, and analytics separate.
           </div>
         </div>
       </div>

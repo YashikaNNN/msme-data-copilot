@@ -24,15 +24,27 @@ from app.services.validation import default_rules
 import pandas as pd
 
 
-def get_dataset(db: Session, dataset_id: int) -> Dataset:
+def get_dataset(db: Session, dataset_id: int, business_id: int | None = None) -> Dataset:
     dataset = db.get(Dataset, dataset_id)
     if dataset is None:
+        raise AppError("Dataset not found.", 404)
+    if business_id is not None and dataset.business_id != business_id:
         raise AppError("Dataset not found.", 404)
     return dataset
 
 
-def log_activity(db: Session, action: str, message: str, dataset_id: int | None = None) -> None:
-    db.add(ActivityEvent(dataset_id=dataset_id, action=action, message=message))
+def business_dataset_ids(db: Session, business_id: int) -> list[int]:
+    return [row.id for row in db.query(Dataset.id).filter_by(business_id=business_id).all()]
+
+
+def log_activity(
+    db: Session,
+    action: str,
+    message: str,
+    dataset_id: int | None = None,
+    business_id: int | None = None,
+) -> None:
+    db.add(ActivityEvent(dataset_id=dataset_id, business_id=business_id, action=action, message=message))
 
 
 def replace_layer(db: Session, dataset_id: int, layer: str, frame: pd.DataFrame) -> int:

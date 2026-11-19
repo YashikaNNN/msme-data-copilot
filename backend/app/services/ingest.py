@@ -37,6 +37,7 @@ def create_dataset(
     content: bytes,
     content_type: str | None,
     is_sample: bool = False,
+    business_id: int | None = None,
 ) -> Dataset:
     clean_name = " ".join(name.split())
     if not clean_name or len(clean_name) > 160:
@@ -67,6 +68,7 @@ def create_dataset(
         raise
 
     dataset = Dataset(
+        business_id=business_id,
         name=clean_name,
         description=description.strip(),
         category=category,
@@ -96,12 +98,18 @@ def create_dataset(
     save_profile(db, dataset, "bronze", frame)
     ensure_rules(db, dataset.id, list(frame.columns))
     note = f" Uploaded with {len(notes)} schema note(s)." if notes else ""
-    log_activity(db, "upload", f"Uploaded {dataset.name} ({dataset.row_count} rows).{note}", dataset.id)
+    log_activity(
+        db,
+        "upload",
+        f"Uploaded {dataset.name} ({dataset.row_count} rows).{note}",
+        dataset.id,
+        business_id=business_id,
+    )
     db.flush()
     return dataset
 
 
-def load_samples(db: Session, replace_existing: bool = False) -> list[Dataset]:
+def load_samples(db: Session, business_id: int, replace_existing: bool = False) -> list[Dataset]:
     settings = get_settings()
     created: list[Dataset] = []
     for filename, name, category, description in SAMPLE_ORDER:
@@ -109,10 +117,10 @@ def load_samples(db: Session, replace_existing: bool = False) -> list[Dataset]:
         if not path.exists():
             raise AppError(f"Sample file {filename} is missing from the server.")
         if replace_existing:
-            existing = db.query(Dataset).filter_by(name=name, is_sample=True).all()
+            existing = db.query(Dataset).filter_by(name=name, is_sample=True, business_id=business_id).all()
             for dataset in existing:
                 delete_dataset(db, dataset)
-        elif db.query(Dataset).filter_by(name=name, is_sample=True).first():
+        elif db.query(Dataset).filter_by(name=name, is_sample=True, business_id=business_id).first():
             continue
         created.append(
             create_dataset(
@@ -124,6 +132,7 @@ def load_samples(db: Session, replace_existing: bool = False) -> list[Dataset]:
                 content=path.read_bytes(),
                 content_type="text/csv",
                 is_sample=True,
+                business_id=business_id,
             )
         )
     return created

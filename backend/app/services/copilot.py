@@ -34,7 +34,13 @@ SUGGESTIONS = [
 ]
 
 
-def ask(db: Session, question: str, session_id: int | None = None, dataset_id: int | None = None) -> dict:
+def ask(
+    db: Session,
+    question: str,
+    session_id: int | None = None,
+    dataset_id: int | None = None,
+    business_id: int | None = None,
+) -> dict:
     text = " ".join(question.strip().split())
     if not text:
         from app.errors import AppError
@@ -46,13 +52,24 @@ def ask(db: Session, question: str, session_id: int | None = None, dataset_id: i
         raise AppError("Questions are limited to 2000 characters.")
 
     session = db.get(ChatSession, session_id) if session_id else None
+    if session is not None and business_id is not None and session.business_id != business_id:
+        from app.errors import AppError
+
+        raise AppError("Conversation not found.", 404)
     if session is None:
-        session = ChatSession(title=text[:80])
+        session = ChatSession(title=text[:80], business_id=business_id)
         db.add(session)
         db.flush()
 
+    if dataset_id is not None and business_id is not None:
+        dataset = db.get(Dataset, dataset_id)
+        if dataset is None or dataset.business_id != business_id:
+            from app.errors import AppError
+
+            raise AppError("Dataset not found.", 404)
+
     intent = _intent(text)
-    facts, metrics, sources, answer = _answer(db, intent, dataset_id)
+    facts, metrics, sources, answer = _answer(db, intent, dataset_id, business_id)
     narrative, provider, note = explain(text, {"intent": intent, "facts": facts})
     final = narrative or answer
     if narrative:
@@ -99,12 +116,17 @@ def _intent(question: str) -> str:
     return "unknown"
 
 
-def _answer(db: Session, intent: str, dataset_id: int | None) -> tuple[dict, list[dict], list[str], str]:
-    sales = analytics.sales_report(db)
-    customers = analytics.customer_report(db)
-    inventory = analytics.inventory_report(db)
-    expenses = analytics.expense_report(db)
-    quality = analytics.quality_facts(db)
+def _answer(
+    db: Session,
+    intent: str,
+    dataset_id: int | None,
+    business_id: int | None = None,
+) -> tuple[dict, list[dict], list[str], str]:
+    sales = analytics.sales_report(db, business_id)
+    customers = analytics.customer_report(db, business_id)
+    inventory = analytics.inventory_report(db, business_id)
+    expenses = analytics.expense_report(db, business_id)
+    quality = analytics.quality_facts(db, business_id)
     if dataset_id:
         quality["datasets"] = [item for item in quality["datasets"] if item["id"] == dataset_id]
         dataset = db.get(Dataset, dataset_id)

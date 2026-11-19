@@ -14,17 +14,22 @@ export default function LineagePage() {
       .catch((err) => setError(err.message));
   }, []);
 
-  if (error) return <EmptyState title="Lineage unavailable" description={error} />;
+  if (error) return <EmptyState title="Data journey unavailable" description={error} />;
   if (!datasets) return <Skeleton className="h-48" />;
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="font-display text-3xl font-bold">Data lineage</h1>
-        <p className="mt-1 text-muted">How each file moves from upload → bronze → silver → validated → gold.</p>
+        <h1 className="font-display text-3xl font-bold">Data journey</h1>
+        <p className="mt-1 text-muted">
+          See where each file came from and how it moved through upload → quality → cleaning → validation → insights.
+        </p>
       </div>
       {datasets.length === 0 ? (
-        <EmptyState title="No lineage yet" description="Run a pipeline on a dataset to record lineage edges." />
+        <EmptyState
+          title="No journey recorded yet"
+          description="Upload a dataset and run processing to see how your data was prepared."
+        />
       ) : (
         <div className="space-y-4">
           {datasets.map((dataset) => (
@@ -32,7 +37,9 @@ export default function LineagePage() {
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
                   <h2 className="font-display text-lg font-semibold">{dataset.name}</h2>
-                  <p className="text-sm text-muted">{dataset.category} · {dataset.status}</p>
+                  <p className="text-sm text-muted">
+                    {dataset.category} · status: {dataset.status}
+                  </p>
                 </div>
                 {dataset.is_sample ? <Badge tone="accent">sample</Badge> : null}
               </div>
@@ -44,13 +51,16 @@ export default function LineagePage() {
                         {edge.source} → {edge.target}
                       </div>
                       <div className="mt-1 text-muted">
-                        Stage: {edge.stage}. {edge.description}
+                        Step: {edge.stage}. {edge.description}
                       </div>
                     </div>
                   ))}
                 </div>
               ) : (
-                <p className="mt-4 text-sm text-muted">No pipeline lineage recorded for this dataset yet.</p>
+                <p className="mt-4 text-sm text-muted">
+                  This file is uploaded, but processing has not recorded a journey yet. Open the dataset and run
+                  processing.
+                </p>
               )}
             </Card>
           ))}

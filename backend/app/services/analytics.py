@@ -11,6 +11,7 @@ from collections import defaultdict
 from sqlalchemy.orm import Session
 
 from app.models import Dataset, GoldRecord, QualityIssue, QualitySnapshot
+from app.services.repository import business_dataset_ids
 
 
 def _money(value) -> float | None:
@@ -19,12 +20,18 @@ def _money(value) -> float | None:
     return round(float(value), 2)
 
 
-def _rows(db: Session, entity: str) -> list[GoldRecord]:
-    return db.query(GoldRecord).filter_by(entity=entity).all()
+def _rows(db: Session, entity: str, business_id: int | None = None) -> list[GoldRecord]:
+    query = db.query(GoldRecord).filter_by(entity=entity)
+    if business_id is not None:
+        ids = business_dataset_ids(db, business_id)
+        if not ids:
+            return []
+        query = query.filter(GoldRecord.dataset_id.in_(ids))
+    return query.all()
 
 
-def sales_report(db: Session) -> dict:
-    rows = _rows(db, "sale")
+def sales_report(db: Session, business_id: int | None = None) -> dict:
+    rows = _rows(db, "sale", business_id)
     if not rows:
         return _missing(
             "sales",
@@ -107,9 +114,9 @@ def sales_report(db: Session) -> dict:
     }
 
 
-def customer_report(db: Session) -> dict:
-    people = _rows(db, "customer")
-    sales = _rows(db, "sale")
+def customer_report(db: Session, business_id: int | None = None) -> dict:
+    people = _rows(db, "customer", business_id)
+    sales = _rows(db, "sale", business_id)
     if not people and not sales:
         return _missing("customers", "No customer or sales rows are loaded.", ["customer id", "customer name", "sales amount"])
     names = {row.customer_id: row.name for row in people if row.customer_id}
@@ -148,11 +155,11 @@ def customer_report(db: Session) -> dict:
     }
 
 
-def inventory_report(db: Session) -> dict:
-    stock_rows = _rows(db, "inventory")
+def inventory_report(db: Session, business_id: int | None = None) -> dict:
+    stock_rows = _rows(db, "inventory", business_id)
     if not stock_rows:
         return _missing("inventory", "No validated inventory rows are loaded.", ["product id", "stock quantity"])
-    sales = _rows(db, "sale")
+    sales = _rows(db, "sale", business_id)
     sold: dict[str, float] = defaultdict(float)
     for row in sales:
         if row.product_id and row.quantity is not None:
@@ -208,8 +215,8 @@ def inventory_report(db: Session) -> dict:
     }
 
 
-def expense_report(db: Session) -> dict:
-    rows = _rows(db, "expense")
+def expense_report(db: Session, business_id: int | None = None) -> dict:
+    rows = _rows(db, "expense", business_id)
     if not rows:
         return _missing("expenses", "No validated expenses are loaded.", ["expense date", "category", "amount"])
     priced = [row for row in rows if row.amount is not None]
@@ -236,7 +243,7 @@ def expense_report(db: Session) -> dict:
         deltas.sort(key=lambda item: -item["change"])
         if deltas and deltas[0]["change"] > 0:
             increase = deltas[0]
-    sales = sales_report(db)
+    sales = sales_report(db, business_id)
     comparison = []
     if sales["available"]:
         expense_by_month = {
@@ -268,11 +275,11 @@ def expense_report(db: Session) -> dict:
     }
 
 
-def overview(db: Session) -> dict:
-    sales = sales_report(db)
-    customers = customer_report(db)
-    inventory = inventory_report(db)
-    expenses = expense_report(db)
+def overview(db: Session, business_id: int | None = None) -> dict:
+    sales = sales_report(db, business_id)
+    customers = customer_report(db, business_id)
+    inventory = inventory_report(db, business_id)
+    expenses = expense_report(db, business_id)
     return {
         "sales": _card(sales, "revenue"),
         "customers": {"available": customers["available"], "total_customers": customers.get("total_customers"), "reason": customers.get("reason")},
@@ -281,16 +288,24 @@ def overview(db: Session) -> dict:
     }
 
 
-def quality_facts(db: Session) -> dict:
-    datasets = db.query(Dataset).order_by(Dataset.created_at.desc()).all()
-    issues = (
-        db.query(QualityIssue)
-        .filter_by(layer="bronze")
-        .order_by(QualityIssue.affected_count.desc())
-        .limit(8)
-        .all()
-    )
-    snapshots = db.query(QualitySnapshot).order_by(QualitySnapshot.created_at.desc()).all()
+def quality_facts(db: Session, business_id: int | None = None) -> dict:
+    query = db.query(Dataset).order_by(Dataset.created_at.desc())
+    if business_id is not None:
+        query = query.filter_by(business_id=business_id)
+    datasets = query.all()
+    ids = [dataset.id for dataset in datasets]
+    issues_query = db.query(QualityIssue).filter_by(layer="bronze").order_by(QualityIssue.affected_count.desc())
+    if ids:
+        issues_query = issues_query.filter(QualityIssue.dataset_id.in_(ids))
+    elif business_id is not None:
+        issues_query = issues_query.filter(QualityIssue.dataset_id == -1)
+    issues = issues_query.limit(8).all()
+    snapshots_query = db.query(QualitySnapshot).order_by(QualitySnapshot.created_at.desc())
+    if ids:
+        snapshots_query = snapshots_query.filter(QualitySnapshot.dataset_id.in_(ids))
+    elif business_id is not None:
+        snapshots_query = snapshots_query.filter(QualitySnapshot.dataset_id == -1)
+    snapshots = snapshots_query.all()
     latest: dict[int, QualitySnapshot] = {}
     for snapshot in snapshots:
         latest.setdefault(snapshot.dataset_id, snapshot)

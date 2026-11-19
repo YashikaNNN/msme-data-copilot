@@ -1,48 +1,58 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
-  Activity,
   Bot,
   Database,
+  Download,
   FileUp,
   GitBranch,
   LayoutDashboard,
   LineChart,
+  LogOut,
   PackageOpen,
   ShieldCheck,
   Sparkles,
   Workflow,
-  Download,
 } from "lucide-react";
+import { useAuth } from "@/lib/auth";
+import { Button } from "@/components/ui";
 
 const NAV = [
   { href: "/app", label: "Dashboard", icon: LayoutDashboard },
   { href: "/app/upload", label: "Upload", icon: FileUp },
   { href: "/app/datasets", label: "Datasets", icon: Database },
   { href: "/app/quality", label: "Data Quality", icon: ShieldCheck },
-  { href: "/app/pipelines", label: "Pipelines", icon: Workflow },
+  { href: "/app/pipelines", label: "Processing", icon: Workflow },
   { href: "/app/analytics", label: "Analytics", icon: LineChart },
-  { href: "/app/copilot", label: "AI Copilot", icon: Bot },
-  { href: "/app/lineage", label: "Lineage", icon: GitBranch },
-  { href: "/app/exports", label: "Exports", icon: Download },
-  { href: "/app/samples", label: "Sample Data", icon: PackageOpen },
+  { href: "/app/copilot", label: "Ask AI", icon: Bot },
+  { href: "/app/lineage", label: "Data Journey", icon: GitBranch },
+  { href: "/app/exports", label: "Downloads", icon: Download },
+  { href: "/app/samples", label: "Try Sample Data", icon: PackageOpen },
 ];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
+  const { business, logout } = useAuth();
+
+  async function onLogout() {
+    await logout();
+    router.push("/login");
+  }
+
   return (
-    <div className="min-h-screen lg:grid lg:grid-cols-[260px_1fr]">
+    <div className="min-h-screen lg:grid lg:grid-cols-[250px_1fr]">
       <aside className="border-b border-line bg-panel/90 backdrop-blur lg:border-b-0 lg:border-r">
         <div className="px-5 py-5">
-          <Link href="/" className="flex items-center gap-3">
+          <Link href="/app" className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-accent text-white">
               <Sparkles size={18} />
             </div>
             <div>
               <div className="font-display text-sm font-bold tracking-tight">MSME Data Copilot</div>
-              <div className="text-xs text-muted">Quality → Insights</div>
+              <div className="truncate text-xs text-muted">{business?.business_name || "Your workspace"}</div>
             </div>
           </Link>
         </div>
@@ -66,14 +76,23 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </nav>
       </aside>
       <div className="min-w-0">
-        <header className="flex items-center justify-between border-b border-line bg-panel/70 px-5 py-4 backdrop-blur">
-          <div className="flex items-center gap-2 text-sm text-muted">
-            <Activity size={16} className="text-accent" />
-            Trusted data before business decisions
+        <header className="flex flex-wrap items-center justify-between gap-3 border-b border-line bg-panel/70 px-5 py-4 backdrop-blur">
+          <div>
+            <div className="text-sm font-semibold text-ink">
+              Welcome{business?.owner_name ? `, ${business.owner_name}` : ""}
+            </div>
+            <div className="text-xs text-muted">
+              Upload → Check quality → Clean & validate → View insights
+            </div>
           </div>
-          <Link href="/app/upload" className="rounded-xl bg-accent px-3 py-2 text-sm font-semibold text-white">
-            Upload dataset
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link href="/app/upload" className="rounded-xl bg-accent px-3 py-2 text-sm font-semibold text-white">
+              Upload dataset
+            </Link>
+            <Button variant="ghost" onClick={onLogout} className="text-muted">
+              <LogOut size={16} /> Sign out
+            </Button>
+          </div>
         </header>
         <main className="px-5 py-6 lg:px-8">{children}</main>
       </div>

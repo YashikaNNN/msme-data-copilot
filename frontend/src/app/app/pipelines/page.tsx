@@ -15,17 +15,22 @@ export default function PipelinesPage() {
       .catch((err) => setError(err.message));
   }, []);
 
-  if (error) return <EmptyState title="Pipelines unavailable" description={error} />;
+  if (error) return <EmptyState title="Processing history unavailable" description={error} />;
   if (!items) return <Skeleton className="h-40" />;
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="font-display text-3xl font-bold">Pipeline monitoring</h1>
-        <p className="mt-1 text-muted">Extract → Profile → Clean → Validate → Transform → Load</p>
+        <h1 className="font-display text-3xl font-bold">Processing history</h1>
+        <p className="mt-1 text-muted">
+          Each run follows: read file → check quality → clean → validate → map fields → load insights.
+        </p>
       </div>
       {items.length === 0 ? (
-        <EmptyState title="No pipeline runs" description="Open a dataset and click Run pipeline." />
+        <EmptyState
+          title="No processing runs yet"
+          description="Open a dataset and click Process for insights after cleaning."
+        />
       ) : (
         <div className="space-y-3">
           {items.map((run) => (

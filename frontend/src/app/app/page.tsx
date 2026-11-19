@@ -2,19 +2,15 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
+import dynamic from "next/dynamic";
 import { apiGet, Dataset } from "@/lib/api";
-import { Badge, Card, EmptyState, Skeleton, statusTone } from "@/components/ui";
+import { useAuth } from "@/lib/auth";
+import { Badge, Button, Card, EmptyState, Skeleton, statusTone } from "@/components/ui";
+
+const RevenueChart = dynamic(() => import("@/components/RevenueChart"), { ssr: false });
 
 type Dashboard = {
+  business: { business_name: string; owner_name: string };
   total_datasets: number;
   total_records: number;
   quality_score: number | null;
@@ -25,11 +21,25 @@ type Dashboard = {
   partial_runs: number;
   recent_datasets: Dataset[];
   recent_activity: { id: number; message: string; created_at: string; action: string }[];
-  business: Record<string, any>;
+  business_metrics: Record<string, any>;
   revenue_by_month: { month: string; revenue: number | null; orders: number }[];
+  workflow: {
+    uploaded: boolean;
+    quality_checked: boolean;
+    cleaned: boolean;
+    analytics_ready: boolean;
+  };
 };
 
+const WORKFLOW = [
+  { key: "uploaded", label: "1. Upload dataset", href: "/app/upload" },
+  { key: "quality_checked", label: "2. Check quality", href: "/app/quality" },
+  { key: "cleaned", label: "3. Clean & validate", href: "/app/datasets" },
+  { key: "analytics_ready", label: "4. View insights", href: "/app/analytics" },
+] as const;
+
 export default function DashboardPage() {
+  const { business } = useAuth();
   const [data, setData] = useState<Dashboard | null>(null);
   const [error, setError] = useState("");
 
@@ -54,27 +64,59 @@ export default function DashboardPage() {
 
   const cards = [
     { label: "Datasets", value: data.total_datasets },
-    { label: "Records processed", value: data.total_records },
+    { label: "Records", value: data.total_records },
     {
-      label: "Quality score",
+      label: "Avg quality",
       value: data.quality_score === null ? "—" : `${data.quality_score}%`,
       note: data.quality_note,
     },
     {
-      label: "Pipeline runs",
+      label: "Processing runs",
       value: data.pipeline_runs,
-      note: `${data.successful_runs} success · ${data.failed_runs} failed · ${data.partial_runs} partial`,
+      note: `${data.successful_runs} success · ${data.failed_runs} failed`,
     },
   ];
 
   const chartData = (data.revenue_by_month || []).filter((row) => row.revenue !== null);
+  const metrics = data.business_metrics || {};
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="font-display text-3xl font-bold">Operations dashboard</h1>
-        <p className="mt-1 text-muted">Live counts from uploaded and processed datasets only.</p>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="font-display text-3xl font-bold">
+            {business?.business_name || data.business.business_name} dashboard
+          </h1>
+          <p className="mt-1 text-muted">Your private workspace for clean business data and insights.</p>
+        </div>
+        <div className="flex gap-2">
+          <Link href="/app/samples">
+            <Button variant="secondary">Try sample data</Button>
+          </Link>
+          <Link href="/app/upload">
+            <Button>Upload dataset</Button>
+          </Link>
+        </div>
       </div>
+
+      <Card>
+        <h2 className="font-display text-lg font-semibold">Your workflow</h2>
+        <div className="mt-4 grid gap-3 md:grid-cols-4">
+          {WORKFLOW.map((step) => {
+            const done = data.workflow?.[step.key];
+            return (
+              <Link
+                key={step.key}
+                href={step.href}
+                className={`rounded-xl border px-4 py-3 ${done ? "border-emerald-200 bg-emerald-50" : "border-line bg-slate-50"}`}
+              >
+                <div className="text-sm font-semibold">{step.label}</div>
+                <div className="mt-1 text-xs text-muted">{done ? "Done" : "Next up"}</div>
+              </Link>
+            );
+          })}
+        </div>
+      </Card>
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {cards.map((card) => (
@@ -92,21 +134,13 @@ export default function DashboardPage() {
           {chartData.length === 0 ? (
             <div className="mt-4">
               <EmptyState
-                title="No revenue trend yet"
-                description="Load and process a sales dataset with valid dates and amounts."
+                title="No revenue chart yet"
+                description="Upload a sales file, clean it, then run processing to load trusted amounts and dates."
               />
             </div>
           ) : (
             <div className="mt-4 h-64">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={chartData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                  <XAxis dataKey="month" tick={{ fontSize: 12 }} />
-                  <YAxis tick={{ fontSize: 12 }} />
-                  <Tooltip />
-                  <Bar dataKey="revenue" fill="#0f766e" radius={[8, 8, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+              <RevenueChart data={chartData} />
             </div>
           )}
         </Card>
@@ -115,10 +149,10 @@ export default function DashboardPage() {
           <h2 className="font-display text-lg font-semibold">Business snapshot</h2>
           <div className="mt-4 space-y-3">
             {[
-              ["Sales", data.business?.sales],
-              ["Customers", data.business?.customers],
-              ["Inventory", data.business?.inventory],
-              ["Expenses", data.business?.expenses],
+              ["Sales", metrics.sales],
+              ["Customers", metrics.customers],
+              ["Inventory", metrics.inventory],
+              ["Expenses", metrics.expenses],
             ].map(([label, report]: any) => (
               <div key={label} className="flex items-center justify-between rounded-xl bg-slate-50 px-4 py-3">
                 <div>
@@ -132,7 +166,7 @@ export default function DashboardPage() {
                           : report.inventory_value !== undefined
                             ? `Value ${report.inventory_value ?? "unavailable"}`
                             : `Total ${report.total ?? "unavailable"}`
-                      : report?.reason || "Not available"}
+                      : report?.reason || "Not available yet"}
                   </div>
                 </div>
                 <Badge tone={report?.available ? "ok" : "neutral"}>
@@ -153,7 +187,10 @@ export default function DashboardPage() {
             </Link>
           </div>
           {data.recent_datasets.length === 0 ? (
-            <EmptyState title="No datasets yet" description="Upload a file or load the labelled sample workspace." />
+            <EmptyState
+              title="No datasets yet"
+              description="Upload your first file or load the labelled sample business data."
+            />
           ) : (
             <div className="space-y-3">
               {data.recent_datasets.map((dataset) => (
@@ -165,8 +202,8 @@ export default function DashboardPage() {
                   <div>
                     <div className="font-semibold">{dataset.name}</div>
                     <div className="text-xs text-muted">
-                      {dataset.row_count} rows · {dataset.column_count} columns
-                      {dataset.is_sample ? " · sample" : ""}
+                      {dataset.row_count} rows · {dataset.category}
+                      {dataset.quality_score != null ? ` · quality ${dataset.quality_score}%` : ""}
                     </div>
                   </div>
                   <Badge tone={statusTone(dataset.status)}>{dataset.status}</Badge>
@@ -180,7 +217,7 @@ export default function DashboardPage() {
           <h2 className="font-display text-lg font-semibold">Recent activity</h2>
           {data.recent_activity.length === 0 ? (
             <div className="mt-4">
-              <EmptyState title="No activity yet" description="Uploads, cleaning, and pipeline runs will appear here." />
+              <EmptyState title="No activity yet" description="Uploads, cleaning, and processing will appear here." />
             </div>
           ) : (
             <div className="mt-4 space-y-3">
@@ -188,7 +225,7 @@ export default function DashboardPage() {
                 <div key={item.id} className="rounded-xl bg-slate-50 px-4 py-3">
                   <div className="text-sm font-medium">{item.message}</div>
                   <div className="mt-1 text-xs text-muted">
-                    {item.action} · {new Date(item.created_at).toLocaleString()}
+                    {new Date(item.created_at).toLocaleString()}
                   </div>
                 </div>
               ))}

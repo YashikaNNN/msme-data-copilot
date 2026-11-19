@@ -1,0 +1,11 @@
+product_id,product_name,category,unit_price
+P-100,Notebook A5,Stationery,45
+P-101,Ball Pen Pack,Stationery,120
+P-102,USB Cable,Electronics,199
+P-103,Wireless Mouse,Electronics,749
+P-104,Rice 5kg,Grocery,420
+P-105,Cooking Oil 1L,Grocery,185
+P-106,Cotton Shirt,Apparel,699
+P-107,Denim Jeans,Apparel,1299
+P-100,Notebook A5,Stationery,45
+P-108,LED Bulb,elec,-50

@@ -1,0 +1,10 @@
+product_id,product_name,warehouse,stock_qty,unit_cost
+P-100,Notebook A5,WH-A,12,30
+P-101,Ball Pen Pack,WH-A,55,80
+P-102,USB Cable,WH-B,8,110
+P-103,Wireless Mouse,WH-B,3,420
+P-104,Rice 5kg,WH-C,40,310
+P-105,Cooking Oil 1L,WH-C,,140
+P-106,Cotton Shirt,WH-A,62,450
+P-107,Denim Jeans,WH-A,48,780
+P-999,Unknown Kit,WH-B,25,90

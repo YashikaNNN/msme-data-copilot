@@ -12,9 +12,11 @@ from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.database import get_db
+from app.deps import current_business, optional_token
 from app.errors import AppError
 from app.models import (
     ActivityEvent,
+    Business,
     ChatMessage,
     ChatSession,
     CleaningOperation,
@@ -31,6 +33,12 @@ from app.models import (
     ValidationResult,
 )
 from app.services import analytics, copilot
+from app.services.auth import (
+    business_payload,
+    login_business,
+    logout_session,
+    register_business,
+)
 from app.services.cleaning import STANDARD_OPERATIONS, apply_operations
 from app.services.frames import records_frame
 from app.services.ingest import CATEGORIES, create_dataset, delete_dataset, load_samples, sample_catalog
@@ -151,6 +159,14 @@ def _operations(body: dict) -> list[dict]:
     return cleaned
 
 
+def _owned(db: Session, dataset_id: int, business: Business) -> Dataset:
+    return get_dataset(db, dataset_id, business_id=business.id)
+
+
+def _owned_ids(db: Session, business: Business) -> list[int]:
+    return [row.id for row in db.query(Dataset.id).filter_by(business_id=business.id).all()]
+
+
 def _trusted_frame(db: Session, dataset: Dataset):
     success = db.query(PipelineRun).filter_by(dataset_id=dataset.id, status="success").count()
     partial = db.query(PipelineRun).filter_by(dataset_id=dataset.id, status="partial").count()
@@ -197,20 +213,68 @@ def _xlsx(frame, filename: str):
     )
 
 
+def _auth_response(business: Business, token: str) -> dict:
+    return {"token": token, "business": business_payload(business)}
+
+
 @router.get("/health")
 def health(db: Session = Depends(get_db)) -> dict:
     db.query(Dataset.id).limit(1).all()
     return {"status": "ok", "service": "msme-data-copilot"}
 
 
+@router.post("/auth/register")
+def register(body: dict, db: Session = Depends(get_db)) -> dict:
+    business, token = register_business(
+        db,
+        business_name=str(body.get("business_name") or ""),
+        owner_name=str(body.get("owner_name") or ""),
+        email=str(body.get("email") or ""),
+        password=str(body.get("password") or ""),
+    )
+    return _auth_response(business, token)
+
+
+@router.post("/auth/login")
+def login(body: dict, db: Session = Depends(get_db)) -> dict:
+    business, token = login_business(
+        db,
+        email=str(body.get("email") or ""),
+        password=str(body.get("password") or ""),
+    )
+    return _auth_response(business, token)
+
+
+@router.post("/auth/logout")
+def logout(
+    db: Session = Depends(get_db),
+    token: str | None = Depends(optional_token),
+) -> dict:
+    logout_session(db, token)
+    return {"ok": True}
+
+
+@router.get("/auth/me")
+def me(business: Business = Depends(current_business)) -> dict:
+    return {"business": business_payload(business)}
+
+
 @router.get("/dashboard")
-def dashboard(db: Session = Depends(get_db)) -> dict:
-    datasets = db.query(Dataset).order_by(Dataset.created_at.desc()).all()
+def dashboard(business: Business = Depends(current_business), db: Session = Depends(get_db)) -> dict:
+    datasets = db.query(Dataset).filter_by(business_id=business.id).order_by(Dataset.created_at.desc()).all()
     scores = [_num(dataset.quality_score) for dataset in datasets if dataset.quality_score is not None]
-    runs = db.query(PipelineRun).all()
-    activity = db.query(ActivityEvent).order_by(ActivityEvent.created_at.desc()).limit(8).all()
-    sales = analytics.sales_report(db)
+    ids = [dataset.id for dataset in datasets]
+    runs = db.query(PipelineRun).filter(PipelineRun.dataset_id.in_(ids)).all() if ids else []
+    activity = (
+        db.query(ActivityEvent)
+        .filter_by(business_id=business.id)
+        .order_by(ActivityEvent.created_at.desc())
+        .limit(8)
+        .all()
+    )
+    sales = analytics.sales_report(db, business.id)
     return {
+        "business": business_payload(business),
         "total_datasets": len(datasets),
         "total_records": int(sum(dataset.row_count for dataset in datasets)),
         "quality_score": round(sum(scores) / len(scores), 1) if scores else None,
@@ -230,14 +294,21 @@ def dashboard(db: Session = Depends(get_db)) -> dict:
             }
             for item in activity
         ],
-        "business": analytics.overview(db),
+        "business_metrics": analytics.overview(db, business.id),
         "revenue_by_month": sales.get("by_month") if sales.get("available") else [],
+        "workflow": {
+            "uploaded": len(datasets) > 0,
+            "quality_checked": any(dataset.quality_score is not None for dataset in datasets),
+            "cleaned": any(dataset.status in {"cleaned", "validated", "loaded"} for dataset in datasets),
+            "analytics_ready": bool(sales.get("available"))
+            or any(dataset.status == "loaded" for dataset in datasets),
+        },
     }
 
 
 @router.get("/datasets")
-def list_datasets(db: Session = Depends(get_db)) -> dict:
-    datasets = db.query(Dataset).order_by(Dataset.created_at.desc()).all()
+def list_datasets(business: Business = Depends(current_business), db: Session = Depends(get_db)) -> dict:
+    datasets = db.query(Dataset).filter_by(business_id=business.id).order_by(Dataset.created_at.desc()).all()
     return {"items": [_dataset_brief(dataset) for dataset in datasets]}
 
 
@@ -247,6 +318,7 @@ async def upload_dataset(
     name: str = Form(...),
     category: str = Form(...),
     description: str = Form(""),
+    business: Business = Depends(current_business),
     db: Session = Depends(get_db),
 ) -> dict:
     content = await file.read()
@@ -258,13 +330,18 @@ async def upload_dataset(
         filename=file.filename or "upload.csv",
         content=content,
         content_type=file.content_type,
+        business_id=business.id,
     )
-    return dataset_detail(dataset.id, db)
+    return dataset_detail(dataset.id, business, db)
 
 
 @router.get("/datasets/{dataset_id}")
-def dataset_detail(dataset_id: int, db: Session = Depends(get_db)) -> dict:
-    dataset = get_dataset(db, dataset_id)
+def dataset_detail(
+    dataset_id: int,
+    business: Business = Depends(current_business),
+    db: Session = Depends(get_db),
+) -> dict:
+    dataset = _owned(db, dataset_id, business)
     columns = (
         db.query(DatasetColumn)
         .filter_by(dataset_id=dataset.id)
@@ -287,6 +364,12 @@ def dataset_detail(dataset_id: int, db: Session = Depends(get_db)) -> dict:
         .all()
     )
     silver_count = db.query(func.count(DatasetRecord.id)).filter_by(dataset_id=dataset.id, layer="silver").scalar()
+    latest_run = (
+        db.query(PipelineRun)
+        .filter_by(dataset_id=dataset.id)
+        .order_by(PipelineRun.started_at.desc())
+        .first()
+    )
     return {
         **_dataset_brief(dataset),
         "files": [
@@ -303,6 +386,7 @@ def dataset_detail(dataset_id: int, db: Session = Depends(get_db)) -> dict:
         "suggested_mapping": suggest_mapping(bronze_columns),
         "preview": [row.data for row in preview],
         "silver_rows": int(silver_count or 0),
+        "latest_pipeline": _run(latest_run) if latest_run else None,
         "history": [
             {
                 "layer": item.layer,
@@ -318,12 +402,47 @@ def dataset_detail(dataset_id: int, db: Session = Depends(get_db)) -> dict:
             for item in snapshots
         ],
         "categories": sorted(CATEGORIES),
+        "next_steps": _next_steps(dataset, int(silver_count or 0), latest_run),
     }
 
 
+def _next_steps(dataset: Dataset, silver_rows: int, latest_run: PipelineRun | None) -> list[dict]:
+    steps = [
+        {
+            "key": "quality",
+            "label": "Review data quality",
+            "href": f"/app/quality/{dataset.id}",
+            "done": dataset.quality_score is not None,
+        },
+        {
+            "key": "clean",
+            "label": "Clean & save a trusted copy",
+            "href": f"/app/cleaning/{dataset.id}",
+            "done": silver_rows > 0 or dataset.status in {"cleaned", "validated", "loaded"},
+        },
+        {
+            "key": "pipeline",
+            "label": "Validate & load for analytics",
+            "href": f"/app/datasets/{dataset.id}",
+            "done": latest_run is not None and latest_run.status in {"success", "partial"},
+        },
+        {
+            "key": "analytics",
+            "label": "View business insights",
+            "href": "/app/analytics",
+            "done": dataset.status == "loaded",
+        },
+    ]
+    return steps
+
+
 @router.delete("/datasets/{dataset_id}", status_code=204, response_class=Response)
-def remove_dataset(dataset_id: int, db: Session = Depends(get_db)) -> Response:
-    delete_dataset(db, get_dataset(db, dataset_id))
+def remove_dataset(
+    dataset_id: int,
+    business: Business = Depends(current_business),
+    db: Session = Depends(get_db),
+) -> Response:
+    delete_dataset(db, _owned(db, dataset_id, business))
     return Response(status_code=204)
 
 
@@ -334,11 +453,12 @@ def dataset_records(
     page: int = Query(1, ge=1),
     page_size: int = Query(25, ge=1, le=100),
     q: str = Query(""),
+    business: Business = Depends(current_business),
     db: Session = Depends(get_db),
 ) -> dict:
     if layer not in {"bronze", "silver"}:
         raise AppError("Layer must be bronze or silver.")
-    get_dataset(db, dataset_id)
+    _owned(db, dataset_id, business)
     query = db.query(DatasetRecord).filter_by(dataset_id=dataset_id, layer=layer)
     cleaned = q.replace("%", "").replace("_", "").strip().lower()
     if cleaned:
@@ -362,8 +482,13 @@ def dataset_records(
 
 
 @router.get("/datasets/{dataset_id}/quality")
-def dataset_quality(dataset_id: int, layer: str = Query("bronze"), db: Session = Depends(get_db)) -> dict:
-    dataset = get_dataset(db, dataset_id)
+def dataset_quality(
+    dataset_id: int,
+    layer: str = Query("bronze"),
+    business: Business = Depends(current_business),
+    db: Session = Depends(get_db),
+) -> dict:
+    dataset = _owned(db, dataset_id, business)
     if layer not in {"bronze", "silver"}:
         raise AppError("Layer must be bronze or silver.")
     issues = (
@@ -388,12 +513,30 @@ def dataset_quality(dataset_id: int, layer: str = Query("bronze"), db: Session =
         "consistency": _num(snapshot.consistency) if snapshot else None,
         "issues": [_issue(issue) for issue in issues],
         "note": None if snapshot else "This layer has not been profiled yet.",
+        "plain_summary": _quality_plain_summary(snapshot, issues),
     }
 
 
+def _quality_plain_summary(snapshot, issues: list[QualityIssue]) -> str:
+    if snapshot is None:
+        return "Upload and open this dataset to generate a quality report."
+    missing = sum(issue.affected_count for issue in issues if issue.category in {"missing_values", "completeness"})
+    duplicates = sum(issue.affected_count for issue in issues if "duplicate" in (issue.category or ""))
+    invalid = sum(
+        issue.affected_count
+        for issue in issues
+        if issue.category in {"invalid_dates", "invalid_amounts", "validity", "invalid_values"}
+    )
+    return (
+        f"Overall quality is {float(snapshot.score):.1f}%. "
+        f"About {missing} missing-value findings, {duplicates} duplicate findings, "
+        f"and {invalid} invalid-value findings need attention."
+    )
+
+
 @router.get("/quality/overview")
-def quality_overview(db: Session = Depends(get_db)) -> dict:
-    datasets = db.query(Dataset).order_by(Dataset.created_at.desc()).all()
+def quality_overview(business: Business = Depends(current_business), db: Session = Depends(get_db)) -> dict:
+    datasets = db.query(Dataset).filter_by(business_id=business.id).order_by(Dataset.created_at.desc()).all()
     items = []
     for dataset in datasets:
         snapshot = (
@@ -421,8 +564,13 @@ def quality_overview(db: Session = Depends(get_db)) -> dict:
 
 
 @router.post("/datasets/{dataset_id}/cleaning/preview")
-def preview_cleaning(dataset_id: int, body: dict, db: Session = Depends(get_db)) -> dict:
-    dataset = get_dataset(db, dataset_id)
+def preview_cleaning(
+    dataset_id: int,
+    body: dict,
+    business: Business = Depends(current_business),
+    db: Session = Depends(get_db),
+) -> dict:
+    dataset = _owned(db, dataset_id, business)
     operations = _operations(body)
     frame = load_layer(db, dataset.id, "bronze")
     try:
@@ -444,8 +592,13 @@ def preview_cleaning(dataset_id: int, body: dict, db: Session = Depends(get_db))
 
 
 @router.post("/datasets/{dataset_id}/cleaning/apply")
-def apply_cleaning(dataset_id: int, body: dict, db: Session = Depends(get_db)) -> dict:
-    dataset = get_dataset(db, dataset_id)
+def apply_cleaning(
+    dataset_id: int,
+    body: dict,
+    business: Business = Depends(current_business),
+    db: Session = Depends(get_db),
+) -> dict:
+    dataset = _owned(db, dataset_id, business)
     operations = _operations(body)
     frame = load_layer(db, dataset.id, "bronze")
     try:
@@ -468,7 +621,13 @@ def apply_cleaning(dataset_id: int, body: dict, db: Session = Depends(get_db)) -
             },
         )
     )
-    log_activity(db, "clean", f"Saved a cleaned copy of {dataset.name}. The upload itself was not changed.", dataset.id)
+    log_activity(
+        db,
+        "clean",
+        f"Saved a cleaned copy of {dataset.name}. The upload itself was not changed.",
+        dataset.id,
+        business_id=business.id,
+    )
     return {
         "saved": True,
         "silver_quality_score": report["score"],
@@ -477,19 +636,33 @@ def apply_cleaning(dataset_id: int, body: dict, db: Session = Depends(get_db)) -
 
 
 @router.post("/datasets/{dataset_id}/cleaning/reject")
-def reject_cleaning(dataset_id: int, db: Session = Depends(get_db)) -> dict:
-    dataset = get_dataset(db, dataset_id)
+def reject_cleaning(
+    dataset_id: int,
+    business: Business = Depends(current_business),
+    db: Session = Depends(get_db),
+) -> dict:
+    dataset = _owned(db, dataset_id, business)
     db.query(DatasetRecord).filter_by(dataset_id=dataset.id, layer="silver").delete()
     db.query(GoldRecord).filter_by(dataset_id=dataset.id).delete()
     db.query(CleaningOperation).filter_by(dataset_id=dataset.id, status="applied").update({"status": "rejected"})
     dataset.status = "profiled"
-    log_activity(db, "clean_rejected", f"Removed the cleaned copy of {dataset.name}. Original rows are unchanged.", dataset.id)
+    log_activity(
+        db,
+        "clean_rejected",
+        f"Removed the cleaned copy of {dataset.name}. Original rows are unchanged.",
+        dataset.id,
+        business_id=business.id,
+    )
     return {"rejected": True, "status": dataset.status}
 
 
 @router.get("/datasets/{dataset_id}/cleaning/operations")
-def cleaning_operations(dataset_id: int, db: Session = Depends(get_db)) -> dict:
-    get_dataset(db, dataset_id)
+def cleaning_operations(
+    dataset_id: int,
+    business: Business = Depends(current_business),
+    db: Session = Depends(get_db),
+) -> dict:
+    _owned(db, dataset_id, business)
     rows = (
         db.query(CleaningOperation)
         .filter_by(dataset_id=dataset_id)
@@ -514,15 +687,24 @@ def cleaning_operations(dataset_id: int, db: Session = Depends(get_db)) -> dict:
 
 
 @router.get("/datasets/{dataset_id}/rules")
-def list_rules(dataset_id: int, db: Session = Depends(get_db)) -> dict:
-    get_dataset(db, dataset_id)
+def list_rules(
+    dataset_id: int,
+    business: Business = Depends(current_business),
+    db: Session = Depends(get_db),
+) -> dict:
+    _owned(db, dataset_id, business)
     rules = db.query(QualityRule).filter_by(dataset_id=dataset_id).order_by(QualityRule.id).all()
     return {"rule_types": sorted(RULE_TYPES), "items": [_rule(rule) for rule in rules]}
 
 
 @router.post("/datasets/{dataset_id}/rules")
-def create_rule(dataset_id: int, body: dict, db: Session = Depends(get_db)) -> dict:
-    dataset = get_dataset(db, dataset_id)
+def create_rule(
+    dataset_id: int,
+    body: dict,
+    business: Business = Depends(current_business),
+    db: Session = Depends(get_db),
+) -> dict:
+    dataset = _owned(db, dataset_id, business)
     rule_type = body.get("rule_type")
     column = (body.get("column_name") or "").strip()
     if rule_type not in RULE_TYPES:
@@ -544,10 +726,16 @@ def create_rule(dataset_id: int, body: dict, db: Session = Depends(get_db)) -> d
 
 
 @router.patch("/rules/{rule_id}")
-def update_rule(rule_id: int, body: dict, db: Session = Depends(get_db)) -> dict:
+def update_rule(
+    rule_id: int,
+    body: dict,
+    business: Business = Depends(current_business),
+    db: Session = Depends(get_db),
+) -> dict:
     rule = db.get(QualityRule, rule_id)
     if rule is None:
         raise AppError("Rule not found.", 404)
+    _owned(db, rule.dataset_id, business)
     if "enabled" in body:
         rule.enabled = bool(body["enabled"])
     if "blocks_load" in body:
@@ -559,17 +747,26 @@ def update_rule(rule_id: int, body: dict, db: Session = Depends(get_db)) -> dict
 
 
 @router.delete("/rules/{rule_id}", status_code=204, response_class=Response)
-def delete_rule(rule_id: int, db: Session = Depends(get_db)) -> Response:
+def delete_rule(
+    rule_id: int,
+    business: Business = Depends(current_business),
+    db: Session = Depends(get_db),
+) -> Response:
     rule = db.get(QualityRule, rule_id)
     if rule is None:
         raise AppError("Rule not found.", 404)
+    _owned(db, rule.dataset_id, business)
     db.delete(rule)
     return Response(status_code=204)
 
 
 @router.post("/datasets/{dataset_id}/validate")
-def validate_dataset(dataset_id: int, db: Session = Depends(get_db)) -> dict:
-    dataset = get_dataset(db, dataset_id)
+def validate_dataset(
+    dataset_id: int,
+    business: Business = Depends(current_business),
+    db: Session = Depends(get_db),
+) -> dict:
+    dataset = _owned(db, dataset_id, business)
     frame = load_layer(db, dataset.id, "silver")
     layer = "silver"
     if frame.empty:
@@ -585,8 +782,12 @@ def validate_dataset(dataset_id: int, db: Session = Depends(get_db)) -> dict:
 
 
 @router.get("/datasets/{dataset_id}/validation")
-def validation_results(dataset_id: int, db: Session = Depends(get_db)) -> dict:
-    get_dataset(db, dataset_id)
+def validation_results(
+    dataset_id: int,
+    business: Business = Depends(current_business),
+    db: Session = Depends(get_db),
+) -> dict:
+    _owned(db, dataset_id, business)
     rows = db.query(ValidationResult).filter_by(dataset_id=dataset_id).order_by(ValidationResult.id).all()
     return {
         "items": [
@@ -605,30 +806,55 @@ def validation_results(dataset_id: int, db: Session = Depends(get_db)) -> dict:
 
 
 @router.post("/validation/references")
-def run_reference_checks(db: Session = Depends(get_db)) -> dict:
-    return {"items": refresh_references(db)}
+def run_reference_checks(business: Business = Depends(current_business), db: Session = Depends(get_db)) -> dict:
+    return {"items": refresh_references(db, business.id)}
 
 
 @router.get("/pipelines")
-def list_pipelines(db: Session = Depends(get_db)) -> dict:
-    runs = db.query(PipelineRun).order_by(PipelineRun.started_at.desc()).limit(100).all()
-    names = {dataset.id: dataset.name for dataset in db.query(Dataset).all()}
+def list_pipelines(business: Business = Depends(current_business), db: Session = Depends(get_db)) -> dict:
+    ids = _owned_ids(db, business)
+    if not ids:
+        return {"items": []}
+    runs = (
+        db.query(PipelineRun)
+        .filter(PipelineRun.dataset_id.in_(ids))
+        .order_by(PipelineRun.started_at.desc())
+        .limit(100)
+        .all()
+    )
+    names = {
+        dataset.id: dataset.name
+        for dataset in db.query(Dataset).filter(Dataset.id.in_(ids)).all()
+    }
     return {"items": [{**_run(run), "dataset_name": names.get(run.dataset_id, "Removed dataset")} for run in runs]}
 
 
 @router.get("/pipelines/{run_id}")
-def pipeline_detail(run_id: int, db: Session = Depends(get_db)) -> dict:
+def pipeline_detail(
+    run_id: int,
+    business: Business = Depends(current_business),
+    db: Session = Depends(get_db),
+) -> dict:
     run = db.get(PipelineRun, run_id)
     if run is None:
         raise AppError("Pipeline run not found.", 404)
+    dataset = _owned(db, run.dataset_id, business)
     stages = db.query(PipelineStage).filter_by(run_id=run.id).order_by(PipelineStage.id).all()
-    dataset = db.get(Dataset, run.dataset_id)
+    friendly = {
+        "extract": "Read uploaded file",
+        "profile": "Check data quality",
+        "clean": "Apply cleaning",
+        "validate": "Validate & quarantine bad rows",
+        "transform": "Map business fields",
+        "load": "Load trusted analytics data",
+    }
     return {
         **_run(run),
-        "dataset_name": dataset.name if dataset else "Removed dataset",
+        "dataset_name": dataset.name,
         "stages": [
             {
                 "name": stage.name,
+                "label": friendly.get(stage.name, stage.name.replace("_", " ").title()),
                 "status": stage.status,
                 "started_at": _dt(stage.started_at),
                 "finished_at": _dt(stage.finished_at),
@@ -645,57 +871,72 @@ def pipeline_detail(run_id: int, db: Session = Depends(get_db)) -> dict:
 
 
 @router.post("/datasets/{dataset_id}/pipeline/run")
-def start_pipeline(dataset_id: int, db: Session = Depends(get_db)) -> dict:
+def start_pipeline(
+    dataset_id: int,
+    business: Business = Depends(current_business),
+    db: Session = Depends(get_db),
+) -> dict:
+    _owned(db, dataset_id, business)
     run = run_pipeline(db, dataset_id)
-    refresh_references(db)
-    return pipeline_detail(run.id, db)
+    refresh_references(db, business.id)
+    return pipeline_detail(run.id, business, db)
 
 
 @router.get("/analytics/overview")
-def analytics_overview(db: Session = Depends(get_db)) -> dict:
+def analytics_overview(business: Business = Depends(current_business), db: Session = Depends(get_db)) -> dict:
     return {
-        "sales": analytics.sales_report(db),
-        "customers": analytics.customer_report(db),
-        "inventory": analytics.inventory_report(db),
-        "expenses": analytics.expense_report(db),
+        "sales": analytics.sales_report(db, business.id),
+        "customers": analytics.customer_report(db, business.id),
+        "inventory": analytics.inventory_report(db, business.id),
+        "expenses": analytics.expense_report(db, business.id),
     }
 
 
 @router.get("/analytics/sales")
-def analytics_sales(db: Session = Depends(get_db)) -> dict:
-    return analytics.sales_report(db)
+def analytics_sales(business: Business = Depends(current_business), db: Session = Depends(get_db)) -> dict:
+    return analytics.sales_report(db, business.id)
 
 
 @router.get("/analytics/customers")
-def analytics_customers(db: Session = Depends(get_db)) -> dict:
-    return analytics.customer_report(db)
+def analytics_customers(business: Business = Depends(current_business), db: Session = Depends(get_db)) -> dict:
+    return analytics.customer_report(db, business.id)
 
 
 @router.get("/analytics/inventory")
-def analytics_inventory(db: Session = Depends(get_db)) -> dict:
-    return analytics.inventory_report(db)
+def analytics_inventory(business: Business = Depends(current_business), db: Session = Depends(get_db)) -> dict:
+    return analytics.inventory_report(db, business.id)
 
 
 @router.get("/analytics/expenses")
-def analytics_expenses(db: Session = Depends(get_db)) -> dict:
-    return analytics.expense_report(db)
+def analytics_expenses(business: Business = Depends(current_business), db: Session = Depends(get_db)) -> dict:
+    return analytics.expense_report(db, business.id)
 
 
 @router.get("/copilot/suggestions")
-def copilot_suggestions(db: Session = Depends(get_db)) -> dict:
+def copilot_suggestions(business: Business = Depends(current_business), db: Session = Depends(get_db)) -> dict:
     return {"items": copilot.suggestions(db)}
 
 
 @router.get("/copilot/sessions")
-def copilot_sessions(db: Session = Depends(get_db)) -> dict:
-    sessions = db.query(ChatSession).order_by(ChatSession.created_at.desc()).limit(30).all()
+def copilot_sessions(business: Business = Depends(current_business), db: Session = Depends(get_db)) -> dict:
+    sessions = (
+        db.query(ChatSession)
+        .filter_by(business_id=business.id)
+        .order_by(ChatSession.created_at.desc())
+        .limit(30)
+        .all()
+    )
     return {"items": [{"id": item.id, "title": item.title, "created_at": _dt(item.created_at)} for item in sessions]}
 
 
 @router.get("/copilot/sessions/{session_id}")
-def copilot_session(session_id: int, db: Session = Depends(get_db)) -> dict:
+def copilot_session(
+    session_id: int,
+    business: Business = Depends(current_business),
+    db: Session = Depends(get_db),
+) -> dict:
     session = db.get(ChatSession, session_id)
-    if session is None:
+    if session is None or session.business_id != business.id:
         raise AppError("Conversation not found.", 404)
     messages = db.query(ChatMessage).filter_by(session_id=session.id).order_by(ChatMessage.id).all()
     return {
@@ -715,14 +956,25 @@ def copilot_session(session_id: int, db: Session = Depends(get_db)) -> dict:
 
 
 @router.post("/copilot/ask")
-def copilot_ask(body: dict, db: Session = Depends(get_db)) -> dict:
-    return copilot.ask(db, str(body.get("question") or ""), body.get("session_id"), body.get("dataset_id"))
+def copilot_ask(
+    body: dict,
+    business: Business = Depends(current_business),
+    db: Session = Depends(get_db),
+) -> dict:
+    return copilot.ask(
+        db,
+        str(body.get("question") or ""),
+        body.get("session_id"),
+        body.get("dataset_id"),
+        business_id=business.id,
+    )
 
 
 @router.get("/lineage")
-def lineage(db: Session = Depends(get_db)) -> dict:
-    datasets = db.query(Dataset).order_by(Dataset.created_at).all()
-    edges = db.query(LineageEdge).order_by(LineageEdge.id).all()
+def lineage(business: Business = Depends(current_business), db: Session = Depends(get_db)) -> dict:
+    datasets = db.query(Dataset).filter_by(business_id=business.id).order_by(Dataset.created_at).all()
+    ids = [dataset.id for dataset in datasets]
+    edges = db.query(LineageEdge).filter(LineageEdge.dataset_id.in_(ids)).order_by(LineageEdge.id).all() if ids else []
     grouped: dict[int, list] = {}
     for edge in edges:
         grouped.setdefault(edge.dataset_id, []).append(
@@ -749,10 +1001,15 @@ def lineage(db: Session = Depends(get_db)) -> dict:
 
 
 @router.get("/datasets/{dataset_id}/export/{kind}")
-def export_dataset(dataset_id: int, kind: str, db: Session = Depends(get_db)):
+def export_dataset(
+    dataset_id: int,
+    kind: str,
+    business: Business = Depends(current_business),
+    db: Session = Depends(get_db),
+):
     import pandas as pd
 
-    dataset = get_dataset(db, dataset_id)
+    dataset = _owned(db, dataset_id, business)
     if kind == "raw.csv":
         return _csv(load_layer(db, dataset.id, "bronze"), f"{dataset.name}-original.csv")
     if kind == "cleaned.csv":
@@ -794,18 +1051,22 @@ def export_dataset(dataset_id: int, kind: str, db: Session = Depends(get_db)):
 
 
 @router.get("/pipelines/{run_id}/export.json")
-def export_pipeline(run_id: int, db: Session = Depends(get_db)):
-    return pipeline_detail(run_id, db)
+def export_pipeline(
+    run_id: int,
+    business: Business = Depends(current_business),
+    db: Session = Depends(get_db),
+):
+    return pipeline_detail(run_id, business, db)
 
 
 @router.get("/analytics/export.csv")
-def export_analytics(db: Session = Depends(get_db)):
+def export_analytics(business: Business = Depends(current_business), db: Session = Depends(get_db)):
     import pandas as pd
 
-    sales = analytics.sales_report(db)
-    expenses = analytics.expense_report(db)
-    inventory = analytics.inventory_report(db)
-    customers = analytics.customer_report(db)
+    sales = analytics.sales_report(db, business.id)
+    expenses = analytics.expense_report(db, business.id)
+    inventory = analytics.inventory_report(db, business.id)
+    customers = analytics.customer_report(db, business.id)
     rows = [
         {
             "metric": "Revenue",
@@ -842,12 +1103,12 @@ def export_analytics(db: Session = Depends(get_db)):
 
 
 @router.get("/samples")
-def list_samples() -> dict:
+def list_samples(business: Business = Depends(current_business)) -> dict:
     return {"items": sample_catalog()}
 
 
 @router.get("/samples/{filename}")
-def download_sample(filename: str):
+def download_sample(filename: str, business: Business = Depends(current_business)):
     allowed = {item["filename"] for item in sample_catalog()}
     if filename not in allowed or "/" in filename or ".." in filename:
         raise AppError("Sample file not found.", 404)
@@ -858,13 +1119,14 @@ def download_sample(filename: str):
 @router.post("/samples/load")
 def load_sample_data(
     run_pipeline_flag: bool = Query(True, alias="run_pipeline"),
+    business: Business = Depends(current_business),
     db: Session = Depends(get_db),
 ) -> dict:
-    load_samples(db)
+    load_samples(db, business_id=business.id)
     loaded = []
     if run_pipeline_flag:
         order = ["Sample products", "Sample customers", "Sample inventory", "Sample expenses", "Sample sales"]
-        datasets = db.query(Dataset).filter_by(is_sample=True).all()
+        datasets = db.query(Dataset).filter_by(is_sample=True, business_id=business.id).all()
         datasets.sort(key=lambda item: order.index(item.name) if item.name in order else 99)
         for dataset in datasets:
             run = run_pipeline(db, dataset.id)
@@ -878,5 +1140,5 @@ def load_sample_data(
                     "rejected": run.records_rejected,
                 }
             )
-        refresh_references(db)
+        refresh_references(db, business.id)
     return {"processed": loaded}

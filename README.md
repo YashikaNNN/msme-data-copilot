@@ -8,15 +8,18 @@ This is a **new project**. It reuses ideas and stack patterns from the AI-powere
 
 ## Features
 
+- Business registration and login (business name, owner, email, password)
+- Private per-business workspaces — datasets and analytics stay isolated
 - Upload CSV, XLSX, JSON with schema detection and preview
-- Real data-quality scoring (completeness, validity, uniqueness, consistency)
-- Cleaning workspace with preview / apply / reject (Bronze never overwritten)
+- Clear workflow: Upload → Check quality → Clean & validate → View insights
+- Real data-quality scoring with plain-language explanations
+- Cleaning workspace with preview / apply / reject (original upload never overwritten)
 - Validation rules with quarantine for blocking failures
-- Bronze → Silver → Gold pipeline with stage history and lineage
-- Business analytics for sales, customers, inventory, expenses
+- Processing history with understandable stage labels
+- Business analytics charts for sales, customers, inventory, expenses
 - AI Copilot grounded in calculated metrics (works without an API key)
 - Sample messy business datasets for a labelled demo
-- Exports for cleaned data, quality reports, pipeline JSON, analytics summary
+- Authenticated downloads for cleaned data, quality reports, and analytics summaries
 
 ## Tech stack
 
@@ -59,9 +62,10 @@ Open [http://localhost:3000](http://localhost:3000).
 
 ### 3. Demo path
 
-1. Open **Sample Data** → **Load sample workspace**
-2. Inspect **Data Quality**, **Cleaning**, **Validation**, **Pipelines**
-3. Open **Analytics** and **AI Copilot**
+1. Create a business account (or sign in)
+2. Open **Try Sample Data** → **Load into my workspace**
+3. Follow **Check quality → Clean data → Process for insights**
+4. Open **Analytics** and **Ask AI**
 
 ## Docker
 

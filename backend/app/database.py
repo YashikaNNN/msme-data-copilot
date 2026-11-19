@@ -1,6 +1,6 @@
 from collections.abc import Generator
 
-from sqlalchemy import create_engine, event
+from sqlalchemy import create_engine, event, inspect, text
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 engine = None
@@ -15,6 +15,24 @@ def _enable_sqlite_fk(dbapi_conn, _connection_record) -> None:
     cursor = dbapi_conn.cursor()
     cursor.execute("PRAGMA foreign_keys=ON")
     cursor.close()
+
+
+def _ensure_column(conn, table: str, column: str, ddl: str) -> None:
+    inspector = inspect(conn)
+    if table not in inspector.get_table_names():
+        return
+    existing = {item["name"] for item in inspector.get_columns(table)}
+    if column not in existing:
+        conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {ddl}"))
+
+
+def ensure_auth_columns(bind) -> None:
+    """Add business isolation columns on existing databases without a full rebuild."""
+
+    with bind.begin() as conn:
+        _ensure_column(conn, "datasets", "business_id", "business_id INTEGER")
+        _ensure_column(conn, "chat_sessions", "business_id", "business_id INTEGER")
+        _ensure_column(conn, "activity_events", "business_id", "business_id INTEGER")
 
 
 def init_db() -> None:
@@ -38,6 +56,7 @@ def init_db() -> None:
     from app import models  # noqa: F401
 
     Base.metadata.create_all(engine)
+    ensure_auth_columns(engine)
 
 
 def get_db() -> Generator[Session, None, None]:

@@ -69,13 +69,33 @@ export default function DatasetDetailPage() {
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Link href={`/app/quality/${id}`}><Button variant="secondary">Quality</Button></Link>
-          <Link href={`/app/cleaning/${id}`}><Button variant="secondary">Clean</Button></Link>
+          <Link href={`/app/quality/${id}`}><Button variant="secondary">Check quality</Button></Link>
+          <Link href={`/app/cleaning/${id}`}><Button variant="secondary">Clean data</Button></Link>
           <Link href={`/app/validation/${id}`}><Button variant="secondary">Validate</Button></Link>
-          <Button onClick={runPipeline} disabled={!!busy}>{busy || "Run pipeline"}</Button>
+          <Button onClick={runPipeline} disabled={!!busy}>{busy || "Process for insights"}</Button>
           <Button variant="danger" onClick={remove}>Delete</Button>
         </div>
       </div>
+
+      {error ? <p className="rounded-xl bg-red-50 px-4 py-3 text-sm text-danger">{error}</p> : null}
+
+      {(dataset.next_steps || []).length ? (
+        <Card>
+          <h2 className="font-display text-lg font-semibold">Recommended next steps</h2>
+          <div className="mt-4 grid gap-3 md:grid-cols-4">
+            {dataset.next_steps.map((step: any) => (
+              <Link
+                key={step.key}
+                href={step.href}
+                className={`rounded-xl border px-4 py-3 text-sm ${step.done ? "border-emerald-200 bg-emerald-50" : "border-line bg-slate-50"}`}
+              >
+                <div className="font-semibold">{step.label}</div>
+                <div className="mt-1 text-xs text-muted">{step.done ? "Done" : "Todo"}</div>
+              </Link>
+            ))}
+          </div>
+        </Card>
+      ) : null}
 
       <div className="grid gap-4 md:grid-cols-4">
         {[
