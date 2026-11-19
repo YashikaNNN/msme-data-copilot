@@ -74,6 +74,15 @@ docker compose up --build
 - API docs: http://localhost:8000/docs
 - Postgres: localhost:5433
 
+## Production deploy (Vercel + Render)
+
+Vercel cannot host FastAPI + Postgres. Use:
+
+1. **Render** for API + database (`render.yaml`)
+2. **Vercel** for the Next.js app (`frontend/` root directory)
+
+Full steps: [docs/deployment-vercel.md](docs/deployment-vercel.md)
+
 ## Architecture
 
 ```

@@ -1,5 +1,6 @@
 from pathlib import Path
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
@@ -26,6 +27,19 @@ class Settings(BaseSettings):
     openrouter_api_key: str = ""
     openrouter_model: str = "google/gemini-2.0-flash-001"
     llm_provider: str = "auto"
+
+    @field_validator("database_url", mode="before")
+    @classmethod
+    def normalize_database_url(cls, value: str) -> str:
+        """Accept Render/Heroku postgres:// URLs and use the psycopg driver."""
+        url = str(value).strip()
+        if url.startswith("postgres://"):
+            url = url.replace("postgres://", "postgresql://", 1)
+        if url.startswith("postgresql://") and "+psycopg" not in url and "+asyncpg" not in url:
+            url = url.replace("postgresql://", "postgresql+psycopg://", 1)
+        if "+asyncpg" in url:
+            url = url.replace("+asyncpg", "+psycopg")
+        return url
 
     @property
     def cors_list(self) -> list[str]:
