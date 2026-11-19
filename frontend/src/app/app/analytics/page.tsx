@@ -14,6 +14,7 @@ import {
   YAxis,
 } from "recharts";
 import { apiGet, exportUrl } from "@/lib/api";
+import { money } from "@/lib/format";
 import { Button, Card, EmptyState, Skeleton } from "@/components/ui";
 
 export default function AnalyticsPage() {
@@ -54,9 +55,9 @@ export default function AnalyticsPage() {
           ) : (
             <>
               <div className="mt-4 grid grid-cols-3 gap-3 text-sm">
-                <div className="rounded-xl bg-slate-50 p-3"><div className="text-muted">Revenue</div><div className="text-xl font-bold">{sales.revenue ?? "—"}</div></div>
+                <div className="rounded-xl bg-slate-50 p-3"><div className="text-muted">Revenue</div><div className="text-xl font-bold">{money(sales.revenue)}</div></div>
                 <div className="rounded-xl bg-slate-50 p-3"><div className="text-muted">Orders</div><div className="text-xl font-bold">{sales.orders}</div></div>
-                <div className="rounded-xl bg-slate-50 p-3"><div className="text-muted">AOV</div><div className="text-xl font-bold">{sales.average_order_value ?? "—"}</div></div>
+                <div className="rounded-xl bg-slate-50 p-3"><div className="text-muted">AOV</div><div className="text-xl font-bold">{money(sales.average_order_value)}</div></div>
               </div>
               <div className="mt-4 h-56">
                 <ResponsiveContainer width="100%" height="100%">
@@ -85,7 +86,7 @@ export default function AnalyticsPage() {
               {sales.products.slice(0, 8).map((item: any) => (
                 <div key={item.name} className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2 text-sm">
                   <span>{item.name}</span>
-                  <span className="font-semibold">{item.revenue ?? "amount missing"}</span>
+                  <span className="font-semibold">{item.revenue == null ? "amount missing" : money(item.revenue)}</span>
                 </div>
               ))}
             </div>
@@ -103,7 +104,7 @@ export default function AnalyticsPage() {
                 {(customers.top_customers || []).slice(0, 6).map((item: any) => (
                   <div key={item.customer_id} className="flex justify-between rounded-xl bg-slate-50 px-3 py-2 text-sm">
                     <span>{item.name || item.customer_id}</span>
-                    <span className="font-semibold">{item.revenue ?? "—"}</span>
+                    <span className="font-semibold">{money(item.revenue)}</span>
                   </div>
                 ))}
               </div>
@@ -118,7 +119,7 @@ export default function AnalyticsPage() {
           ) : (
             <>
               <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
-                <div className="rounded-xl bg-slate-50 p-3">Value: {inventory.inventory_value ?? "—"}</div>
+                <div className="rounded-xl bg-slate-50 p-3">Value: {money(inventory.inventory_value)}</div>
                 <div className="rounded-xl bg-slate-50 p-3">Low stock: {(inventory.low_stock || []).length}</div>
               </div>
               <div className="mt-4 space-y-2">
