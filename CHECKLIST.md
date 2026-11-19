@@ -16,6 +16,11 @@
 - [x] Backend pytest (upload → quality → pipeline → analytics → copilot)
 - [x] README + architecture docs
 
+## Also completed
+
+- [x] GitHub repository published
+- [x] Docker Compose end-to-end verified (Postgres + API + UI + sample pipeline)
+
 ## Optional later
 
 - [ ] Auth / multi-user workspaces
