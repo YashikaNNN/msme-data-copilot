@@ -42,6 +42,11 @@ ID_NAME_HINTS = ("id", "sku", "code")
 AMOUNT_NAMES = {
     "amount",
     "total",
+    "total amount",
+    "grand total",
+    "net amount",
+    "bill amount",
+    "invoice amount",
     "revenue",
     "price",
     "unit price",
@@ -51,6 +56,8 @@ AMOUNT_NAMES = {
     "expense amount",
     "line total",
     "order amount",
+    "sale amount",
+    "sales amount",
     "sales",
 }
 QTY_NAMES = {"qty", "quantity", "units", "stock", "stock qty", "quantity on hand", "qty on hand"}

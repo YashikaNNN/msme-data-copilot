@@ -231,6 +231,13 @@ def _to_gold(dataset_id: int, entity: str, frame, mapping: dict, reasons: list[s
             amount_text = canon.get("unit_price")
         else:
             amount_text = canon.get("amount")
+        quantity_value = _number(quantity_text)
+        amount_value = _number(amount_text)
+        # Common MSME sheets store unit_price + quantity instead of a precomputed amount.
+        if amount_value is None and entity == "sale":
+            unit_price = _number(canon.get("unit_price"))
+            if unit_price is not None and quantity_value is not None:
+                amount_value = round(unit_price * quantity_value, 2)
         product_name = canon.get("product_name")
         customer_name = canon.get("customer_name")
         gold.append(
@@ -242,8 +249,8 @@ def _to_gold(dataset_id: int, entity: str, frame, mapping: dict, reasons: list[s
                 product_id=canon.get("product_id"),
                 product_name=product_name,
                 category=canon.get("category") or canon.get("segment"),
-                quantity=_number(quantity_text),
-                amount=_number(amount_text),
+                quantity=quantity_value,
+                amount=amount_value,
                 email=canon.get("email"),
                 name=customer_name or (product_name if entity in {"product", "inventory"} else None),
                 extra={key: value for key, value in canon.items()},
