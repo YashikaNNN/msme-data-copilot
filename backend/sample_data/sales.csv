@@ -1,0 +1,13 @@
+order_id,order_date,customer_id,product_id,product_name,category,quantity,amount
+O-1001,2024-01-15,C-001,P-100,Notebook A5,Stationery,10,450
+O-1002,15/01/2024,C-002,P-104,Rice 5kg,Grocery,2,840
+O-1003,2024-02-03,c-001,P-102,USB Cable,Electronics,1,199
+O-1004,02-03-2024,C-004,P-106,Cotton Shirt,Apparel,1,699
+O-1005,2024-03-11,C-005,P-103,Wireless Mouse,elec,2,1498
+O-1006,2024-03-11,C-005,P-103,Wireless Mouse,Electronics,2,1498
+O-1007,2024-04-02,C-006,P-101,Ball Pen Pack,Stationery,5,abc
+O-1008,2024-04-18,C-003,P-107,Denim Jeans,Apparel,1,1299
+O-1009,2024-05-05,C-002,P-105,Cooking Oil 1L,Grocery,3,555
+O-1010,2024-05-21,C-001,P-108,LED Bulb,Electronics,4,-100
+O-1011,2024-05-28,C-999,P-999,Unknown Kit,Other,1,500
+O-1012,,C-004,P-100,Notebook A5,Stationery,2,90
