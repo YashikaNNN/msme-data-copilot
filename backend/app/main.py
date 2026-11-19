@@ -19,11 +19,11 @@ logger = logging.getLogger("msme")
 async def lifespan(_app: FastAPI):
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
     init_db()
-    logger.info("MSME Data Copilot API ready")
+    logger.info("BizQuery : MSME Data Copilot API ready")
     yield
 
 
-app = FastAPI(title="MSME Data Copilot API", version="1.0.0", lifespan=lifespan)
+app = FastAPI(title="BizQuery : MSME Data Copilot API", version="1.0.0", lifespan=lifespan)
 settings = get_settings()
 app.add_middleware(
     CORSMiddleware,
@@ -74,7 +74,7 @@ async def app_error(_request: Request, exc: AppError) -> JSONResponse:
 
 @app.get("/")
 def root() -> dict:
-    return {"name": "MSME Data Copilot", "docs": "/docs", "health": "/api/v1/health"}
+    return {"name": "BizQuery : MSME Data Copilot", "docs": "/docs", "health": "/api/v1/health"}
 
 
 app.include_router(router)

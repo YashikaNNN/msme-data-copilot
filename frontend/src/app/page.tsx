@@ -32,7 +32,7 @@ export default function LandingPage() {
       <div className="overflow-hidden rounded-[2rem] border border-line bg-panel shadow-soft">
         <div className="grid gap-8 bg-[linear-gradient(135deg,#0f766e_0%,#115e59_45%,#0f172a_100%)] px-8 py-12 text-white lg:grid-cols-[1.2fr_0.8fr] lg:px-12 lg:py-16">
           <div>
-            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-teal-100">MSME Data Copilot</p>
+            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-teal-100">BizQuery : MSME Data Copilot</p>
             <h1 className="mt-4 font-display text-4xl font-bold leading-tight lg:text-5xl">
               Clean business data. Trusted insights.
             </h1>

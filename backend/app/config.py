@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     )
 
     app_env: str = "development"
-    app_name: str = "MSME Data Copilot"
+    app_name: str = "BizQuery : MSME Data Copilot"
     database_url: str = "sqlite:///./msme_copilot.db"
     cors_origins: str = "http://localhost:3000"
     storage_dir: str = "storage"

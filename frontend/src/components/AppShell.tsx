@@ -50,8 +50,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-accent text-white">
               <Sparkles size={18} />
             </div>
-            <div>
-              <div className="font-display text-sm font-bold tracking-tight">MSME Data Copilot</div>
+            <div className="min-w-0">
+              <div className="font-display text-sm font-bold tracking-tight leading-tight">
+                BizQuery : MSME Data Copilot
+              </div>
               <div className="truncate text-xs text-muted">{business?.business_name || "Your workspace"}</div>
             </div>
           </Link>

@@ -15,7 +15,7 @@ const display = IBM_Plex_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "MSME Data Copilot",
+  title: "BizQuery : MSME Data Copilot",
   description: "From messy business spreadsheets to trusted data quality and business intelligence.",
 };
 

@@ -1,4 +1,4 @@
-# MSME Data Copilot
+# BizQuery : MSME Data Copilot
 
 **From messy business data to data quality and business intelligence.**
 
