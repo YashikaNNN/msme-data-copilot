@@ -2,64 +2,105 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { UploadCloud } from "lucide-react";
+import { UploadCloud, X } from "lucide-react";
 import { apiPost } from "@/lib/api";
 import { Button, Card, Input, Select, Textarea } from "@/components/ui";
 
 const CATEGORIES = ["sales", "customers", "products", "inventory", "expenses", "orders", "other"];
 const MAX_MB = 20;
 
+type QueuedFile = {
+  file: File;
+  name: string;
+  category: string;
+  description: string;
+};
+
+function guessCategory(filename: string): string {
+  const lower = filename.toLowerCase();
+  if (lower.includes("sale") || lower.includes("order")) return "sales";
+  if (lower.includes("customer")) return "customers";
+  if (lower.includes("product")) return "products";
+  if (lower.includes("invent") || lower.includes("stock")) return "inventory";
+  if (lower.includes("expense")) return "expenses";
+  return "other";
+}
+
 export default function UploadPage() {
   const router = useRouter();
-  const [file, setFile] = useState<File | null>(null);
-  const [name, setName] = useState("");
-  const [category, setCategory] = useState("sales");
-  const [description, setDescription] = useState("");
+  const [queue, setQueue] = useState<QueuedFile[]>([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [progress, setProgress] = useState("");
   const [drag, setDrag] = useState(false);
 
-  function validate(selected: File | null) {
-    if (!selected) return "Choose a CSV, XLSX, or JSON file.";
+  function validate(selected: File) {
     const ext = selected.name.split(".").pop()?.toLowerCase();
     if (!ext || !["csv", "xlsx", "json"].includes(ext)) return "Only CSV, XLSX, and JSON are allowed.";
-    if (selected.size > MAX_MB * 1024 * 1024) return `File must be under ${MAX_MB} MB.`;
+    if (selected.size > MAX_MB * 1024 * 1024) return `Each file must be under ${MAX_MB} MB.`;
     return "";
+  }
+
+  function addFiles(list: FileList | File[]) {
+    const next: QueuedFile[] = [];
+    for (const file of Array.from(list)) {
+      const problem = validate(file);
+      if (problem) {
+        setError(problem);
+        return;
+      }
+      next.push({
+        file,
+        name: file.name.replace(/\.[^.]+$/, ""),
+        category: guessCategory(file.name),
+        description: "",
+      });
+    }
+    setError("");
+    setQueue((prev) => [...prev, ...next]);
   }
 
   async function onSubmit(event: React.FormEvent) {
     event.preventDefault();
-    const problem = validate(file);
-    if (problem) {
-      setError(problem);
+    if (queue.length === 0) {
+      setError("Add at least one file.");
       return;
     }
-    if (!name.trim()) {
-      setError("Give the dataset a name.");
+    if (queue.some((item) => !item.name.trim())) {
+      setError("Every dataset needs a name.");
       return;
     }
     setLoading(true);
     setError("");
     try {
-      const form = new FormData();
-      form.append("file", file!);
-      form.append("name", name.trim());
-      form.append("category", category);
-      form.append("description", description);
-      const dataset = await apiPost<{ id: number }>("/datasets/upload", form);
-      router.push(`/app/datasets/${dataset.id}`);
+      let lastId = 0;
+      for (let index = 0; index < queue.length; index += 1) {
+        const item = queue[index];
+        setProgress(`Uploading ${index + 1} of ${queue.length}: ${item.name}`);
+        const form = new FormData();
+        form.append("file", item.file);
+        form.append("name", item.name.trim());
+        form.append("category", item.category);
+        form.append("description", item.description);
+        const dataset = await apiPost<{ id: number }>("/datasets/upload", form);
+        lastId = dataset.id;
+      }
+      router.push(queue.length === 1 ? `/app/datasets/${lastId}` : "/app/datasets");
     } catch (err: any) {
       setError(err.message || "Upload failed");
     } finally {
       setLoading(false);
+      setProgress("");
     }
   }
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
       <div>
-        <h1 className="font-display text-3xl font-bold">Upload dataset</h1>
-        <p className="mt-1 text-muted">Files are stored safely. The original copy is never overwritten by cleaning.</p>
+        <h1 className="font-display text-3xl font-bold">Upload datasets</h1>
+        <p className="mt-1 text-muted">
+          Upload one or many CSV/XLSX/JSON files. Originals stay in Bronze and are never overwritten by cleaning.
+        </p>
       </div>
 
       <Card>
@@ -73,66 +114,99 @@ export default function UploadPage() {
             onDrop={(e) => {
               e.preventDefault();
               setDrag(false);
-              const next = e.dataTransfer.files?.[0] || null;
-              setFile(next);
-              if (next && !name) setName(next.name.replace(/\.[^.]+$/, ""));
-              setError(validate(next));
+              if (e.dataTransfer.files?.length) addFiles(e.dataTransfer.files);
             }}
             className={`rounded-2xl border-2 border-dashed px-6 py-10 text-center ${
               drag ? "border-accent bg-teal-50" : "border-line bg-slate-50"
             }`}
           >
             <UploadCloud className="mx-auto text-accent" />
-            <p className="mt-3 font-semibold">Drag and drop a file here</p>
-            <p className="mt-1 text-sm text-muted">CSV, XLSX, or JSON · max {MAX_MB} MB</p>
+            <p className="mt-3 font-semibold">Drag and drop files here</p>
+            <p className="mt-1 text-sm text-muted">CSV, XLSX, or JSON · max {MAX_MB} MB each · multiple allowed</p>
             <label className="mt-4 inline-flex cursor-pointer rounded-xl bg-white px-4 py-2 text-sm font-semibold text-accent shadow-sm">
-              Choose file
+              Choose files
               <input
                 type="file"
+                multiple
                 accept=".csv,.xlsx,.json,application/json,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 className="hidden"
                 onChange={(e) => {
-                  const next = e.target.files?.[0] || null;
-                  setFile(next);
-                  if (next && !name) setName(next.name.replace(/\.[^.]+$/, ""));
-                  setError(validate(next));
+                  if (e.target.files?.length) addFiles(e.target.files);
+                  e.target.value = "";
                 }}
               />
             </label>
-            {file ? <p className="mt-3 text-sm text-ink">{file.name} · {(file.size / 1024).toFixed(1)} KB</p> : null}
           </div>
 
-          <div className="grid gap-4 md:grid-cols-2">
-            <label className="space-y-2 text-sm">
-              <span className="font-semibold">Dataset name</span>
-              <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="January sales" />
-            </label>
-            <label className="space-y-2 text-sm">
-              <span className="font-semibold">Category</span>
-              <Select value={category} onChange={(e) => setCategory(e.target.value)}>
-                {CATEGORIES.map((item) => (
-                  <option key={item} value={item}>
-                    {item}
-                  </option>
-                ))}
-              </Select>
-            </label>
-          </div>
+          {queue.length > 0 ? (
+            <div className="space-y-4">
+              {queue.map((item, index) => (
+                <div key={`${item.file.name}-${index}`} className="rounded-2xl border border-line p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="font-semibold">{item.file.name}</div>
+                      <div className="text-xs text-muted">{(item.file.size / 1024).toFixed(1)} KB</div>
+                    </div>
+                    <button
+                      type="button"
+                      className="rounded-lg p-1 text-muted hover:bg-slate-100 hover:text-ink"
+                      onClick={() => setQueue((prev) => prev.filter((_, i) => i !== index))}
+                    >
+                      <X size={16} />
+                    </button>
+                  </div>
+                  <div className="mt-3 grid gap-3 md:grid-cols-2">
+                    <label className="space-y-1 text-sm">
+                      <span className="font-semibold">Dataset name</span>
+                      <Input
+                        value={item.name}
+                        onChange={(e) =>
+                          setQueue((prev) =>
+                            prev.map((row, i) => (i === index ? { ...row, name: e.target.value } : row)),
+                          )
+                        }
+                      />
+                    </label>
+                    <label className="space-y-1 text-sm">
+                      <span className="font-semibold">Category</span>
+                      <Select
+                        value={item.category}
+                        onChange={(e) =>
+                          setQueue((prev) =>
+                            prev.map((row, i) => (i === index ? { ...row, category: e.target.value } : row)),
+                          )
+                        }
+                      >
+                        {CATEGORIES.map((category) => (
+                          <option key={category} value={category}>
+                            {category}
+                          </option>
+                        ))}
+                      </Select>
+                    </label>
+                  </div>
+                  <label className="mt-3 block space-y-1 text-sm">
+                    <span className="font-semibold">Description</span>
+                    <Textarea
+                      rows={2}
+                      value={item.description}
+                      onChange={(e) =>
+                        setQueue((prev) =>
+                          prev.map((row, i) => (i === index ? { ...row, description: e.target.value } : row)),
+                        )
+                      }
+                    />
+                  </label>
+                </div>
+              ))}
+            </div>
+          ) : null}
 
-          <label className="block space-y-2 text-sm">
-            <span className="font-semibold">Description</span>
-            <Textarea
-              rows={3}
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Optional notes about this file"
-            />
-          </label>
-
+          {progress ? <p className="rounded-xl bg-teal-50 px-4 py-3 text-sm text-accent-2">{progress}</p> : null}
           {error ? <p className="rounded-xl bg-red-50 px-4 py-3 text-sm text-danger">{error}</p> : null}
 
-          <Button type="submit" disabled={loading}>
-            {loading ? "Uploading…" : "Upload and profile"}
+          <Button type="submit" disabled={loading || queue.length === 0}>
+            {loading ? progress || "Uploading…" : `Upload and profile (${queue.length})`}
           </Button>
         </form>
       </Card>
